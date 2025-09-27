@@ -844,6 +844,11 @@
                 "pattern": "You kicked \\[.+\\] (\\w+) from the guild!",
                 "groups": ["username"],
                 "description": "Successful guild kick"
+              },
+              {
+                "pattern": "\\[.+\\] (\\w+) was kicked from the guild by \\[.+\\] \\w+!",
+                "groups": ["username"],
+                "description": "Public kick event message"
               }
             ],
             "error": [

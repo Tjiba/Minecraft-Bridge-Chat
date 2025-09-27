@@ -10,8 +10,21 @@ class CommandResponseListener extends EventEmitter {
     constructor() {
         super();
         
+        // Singleton pattern implementation
+        if (CommandResponseListener.instance) {
+            return CommandResponseListener.instance;
+        }
+        CommandResponseListener.instance = this;
+        
+        // Store reference in prototype for external access
+        CommandResponseListener.prototype._instance = this;
+        
         this.activeListeners = new Map();
         this.listenerCounter = 0;
+        
+        // Track recently resolved listeners to prevent double logging
+        this.recentlyResolvedListeners = new Map(); // Map<listenerId, resolvedData>
+        this.RECENTLY_RESOLVED_TIMEOUT = 5000; // 5 seconds
         
         // Response patterns for different command types
         this.responsePatterns = {};
@@ -19,7 +32,221 @@ class CommandResponseListener extends EventEmitter {
         // Load patterns from configuration
         this.loadResponsePatterns();
 
-        logger.debug('CommandResponseListener initialized');
+        logger.debug('CommandResponseListener initialized with singleton pattern');
+    }
+
+    /**
+     * Get singleton instance
+     * @returns {CommandResponseListener} Singleton instance
+     */
+    static getInstance() {
+        if (!CommandResponseListener.instance) {
+            CommandResponseListener.instance = new CommandResponseListener();
+        }
+        return CommandResponseListener.instance;
+    }
+
+    /**
+     * Static method to check if there's an active listener for a specific event
+     * @param {object} eventData - Event data from Minecraft
+     * @returns {boolean} True if there's an active listener that will handle this event
+     */
+    static hasActiveListenerForEvent(eventData) {
+        try {
+            logger.debug(`[CMD-LISTENER] ================================`);
+            logger.debug(`[CMD-LISTENER] hasActiveListenerForEvent CALLED`);
+            logger.debug(`[CMD-LISTENER] EventData: ${JSON.stringify(eventData)}`);
+            logger.debug(`[CMD-LISTENER] ================================`);
+            
+            // Get singleton instance
+            const instance = CommandResponseListener.getInstance();
+            logger.debug(`[CMD-LISTENER] Singleton instance retrieved: ${!!instance}`);
+            
+            if (!instance) {
+                logger.debug('[CMD-LISTENER] No singleton instance available');
+                return false;
+            }
+
+            const activeListeners = instance.getActiveListeners();
+            const recentlyResolved = instance.recentlyResolvedListeners;
+            
+            logger.debug(`[CMD-LISTENER] Active listeners map size: ${activeListeners.size}`);
+            logger.debug(`[CMD-LISTENER] Recently resolved listeners map size: ${recentlyResolved.size}`);
+            
+            // Clean up old recently resolved listeners
+            instance.cleanupOldResolvedListeners();
+            
+            // Log all active listeners
+            let listenerIndex = 0;
+            for (const [listenerId, listener] of activeListeners) {
+                listenerIndex++;
+                logger.debug(`[CMD-LISTENER] Active Listener ${listenerIndex}/${activeListeners.size}:`);
+                logger.debug(`[CMD-LISTENER]   - ID: ${listenerId}`);
+                logger.debug(`[CMD-LISTENER]   - Guild: ${listener.guildId}`);
+                logger.debug(`[CMD-LISTENER]   - Command Type: ${listener.commandType}`);
+                logger.debug(`[CMD-LISTENER]   - Target Player: ${listener.targetPlayer}`);
+                logger.debug(`[CMD-LISTENER]   - Resolved: ${listener.resolved}`);
+            }
+            
+            // Log recently resolved listeners
+            listenerIndex = 0;
+            for (const [listenerId, resolvedData] of recentlyResolved) {
+                listenerIndex++;
+                logger.debug(`[CMD-LISTENER] Recently Resolved Listener ${listenerIndex}/${recentlyResolved.size}:`);
+                logger.debug(`[CMD-LISTENER]   - ID: ${listenerId}`);
+                logger.debug(`[CMD-LISTENER]   - Guild: ${resolvedData.guildId}`);
+                logger.debug(`[CMD-LISTENER]   - Command Type: ${resolvedData.commandType}`);
+                logger.debug(`[CMD-LISTENER]   - Target Player: ${resolvedData.targetPlayer}`);
+                logger.debug(`[CMD-LISTENER]   - Resolved At: ${new Date(resolvedData.resolvedAt).toISOString()}`);
+                logger.debug(`[CMD-LISTENER]   - Age: ${Date.now() - resolvedData.resolvedAt}ms`);
+            }
+            
+            logger.debug(`[CMD-LISTENER] Checking ${activeListeners.size} active + ${recentlyResolved.size} recently resolved listeners for event: ${eventData.type} - ${eventData.username || 'system'} in guild ${eventData.guildId}`);
+            
+            // Check active listeners first
+            for (const [listenerId, listener] of activeListeners) {
+                if (instance.checkListenerMatch(listenerId, listener, eventData, "ACTIVE")) {
+                    return true;
+                }
+            }
+            
+            // Check recently resolved listeners
+            for (const [listenerId, resolvedData] of recentlyResolved) {
+                if (instance.checkListenerMatch(listenerId, resolvedData, eventData, "RECENTLY_RESOLVED")) {
+                    return true;
+                }
+            }
+            
+            logger.debug(`[CMD-LISTENER] ================================`);
+            logger.debug(`[CMD-LISTENER] NO MATCH FOUND - Event will be logged`);
+            logger.debug(`[CMD-LISTENER] ================================`);
+            return false;
+            
+        } catch (error) {
+            logger.debug('[CMD-LISTENER] Error checking for active command listeners:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if a listener matches an event
+     * @param {string} listenerId - Listener ID
+     * @param {object} listenerData - Listener data (active or resolved)
+     * @param {object} eventData - Event data
+     * @param {string} listenerType - "ACTIVE" or "RECENTLY_RESOLVED"
+     * @returns {boolean} True if matches
+     */
+    checkListenerMatch(listenerId, listenerData, eventData, listenerType) {
+        logger.debug(`[CMD-LISTENER] --------------------------------`);
+        logger.debug(`[CMD-LISTENER] Analyzing ${listenerType} listener ${listenerId}`);
+        
+        // Skip if different guild
+        if (listenerData.guildId !== eventData.guildId) {
+            logger.debug(`[CMD-LISTENER]   ❌ Different guild: ${listenerData.guildId} vs ${eventData.guildId}`);
+            return false;
+        }
+        logger.debug(`[CMD-LISTENER]   ✅ Guild matches: ${listenerData.guildId}`);
+        
+        // For active listeners, skip if already resolved
+        if (listenerType === "ACTIVE" && listenerData.resolved) {
+            logger.debug(`[CMD-LISTENER]   ❌ Already resolved`);
+            return false;
+        }
+        if (listenerType === "ACTIVE") {
+            logger.debug(`[CMD-LISTENER]   ✅ Not resolved yet`);
+        }
+        
+        // Check if this event type matches the command type
+        const isMatchingEvent = this.isEventMatchingCommand(eventData, listenerData);
+        logger.debug(`[CMD-LISTENER]   Event matching check: ${isMatchingEvent} (event: ${eventData.type}, command: ${listenerData.commandType})`);
+        
+        if (isMatchingEvent) {
+            logger.debug(`[CMD-LISTENER]   ✅ Event type matches command type`);
+            
+            // Check if the target player matches (if applicable)
+            if (eventData.username && listenerData.targetPlayer) {
+                const eventPlayerLower = eventData.username.toLowerCase();
+                const targetPlayerLower = listenerData.targetPlayer.toLowerCase();
+                
+                logger.debug(`[CMD-LISTENER]   Comparing players: "${eventPlayerLower}" vs "${targetPlayerLower}"`);
+                
+                if (eventPlayerLower === targetPlayerLower) {
+                    logger.debug(`[CMD-LISTENER]   ✅✅✅ PERFECT MATCH FOUND (${listenerType})! ✅✅✅`);
+                    logger.debug(`[CMD-LISTENER]   Found ${listenerType} Discord command listener for ${eventData.type} event (${eventData.username}) - listener ${listenerId}`);
+                    return true;
+                } else {
+                    logger.debug(`[CMD-LISTENER]   ❌ Player mismatch: "${eventPlayerLower}" vs "${targetPlayerLower}"`);
+                }
+            } else if (!eventData.username || !listenerData.targetPlayer) {
+                // For events without specific players or commands without targets
+                logger.debug(`[CMD-LISTENER]   ✅✅✅ SYSTEM EVENT MATCH FOUND (${listenerType})! ✅✅✅`);
+                logger.debug(`[CMD-LISTENER]   Found ${listenerType} Discord command listener for ${eventData.type} event (system) - listener ${listenerId}`);
+                return true;
+            } else {
+                logger.debug(`[CMD-LISTENER]   ❌ One has player, other doesn't - event: ${!!eventData.username}, listener: ${!!listenerData.targetPlayer}`);
+            }
+        } else {
+            logger.debug(`[CMD-LISTENER]   ❌ Event type doesn't match command type`);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Clean up old recently resolved listeners
+     */
+    cleanupOldResolvedListeners() {
+        const now = Date.now();
+        const toRemove = [];
+        
+        for (const [listenerId, resolvedData] of this.recentlyResolvedListeners) {
+            if (now - resolvedData.resolvedAt > this.RECENTLY_RESOLVED_TIMEOUT) {
+                toRemove.push(listenerId);
+            }
+        }
+        
+        for (const listenerId of toRemove) {
+            this.recentlyResolvedListeners.delete(listenerId);
+            logger.debug(`[CMD-LISTENER] Cleaned up old resolved listener: ${listenerId}`);
+        }
+    }
+
+    /**
+     * Check if an event type matches a command type
+     * @param {object} eventData - Event data
+     * @param {object} listener - Command listener
+     * @returns {boolean} True if they match
+     */
+    isEventMatchingCommand(eventData, listener) {
+        const eventToCommandMap = {
+            'promote': ['promote', 'setrank'], // setrank can generate promote events
+            'demote': ['demote', 'setrank'],   // setrank can generate demote events
+            'kick': ['kick'],
+            'join': ['invite'],
+            'leave': ['kick'], // Leave events can be caused by kicks
+            'setrank': ['setrank'], // Keep original setrank mapping
+            'mute': ['mute'],
+            'unmute': ['unmute']
+        };
+
+        const matchingCommands = eventToCommandMap[eventData.type] || [];
+        const isMatch = matchingCommands.includes(listener.commandType);
+        
+        // Debug log for setrank cases
+        if (listener.commandType === 'setrank' || eventData.type === 'promote' || eventData.type === 'demote') {
+            logger.debug(`[CMD-LISTENER] Event-Command mapping check: event="${eventData.type}" vs command="${listener.commandType}" → match=${isMatch}`);
+            logger.debug(`[CMD-LISTENER] Available commands for event "${eventData.type}": [${matchingCommands.join(', ')}]`);
+        }
+        
+        return isMatch;
+    }
+
+    /**
+     * Get active listeners map (for external access by BridgeCoordinator)
+     * @returns {Map} Active listeners map
+     */
+    getActiveListeners() {
+        return this.activeListeners;
     }
 
     /**
@@ -400,6 +627,17 @@ class CommandResponseListener extends EventEmitter {
         }
 
         listener.resolved = true;
+
+        // Store in recently resolved listeners for double-logging prevention
+        this.recentlyResolvedListeners.set(listenerId, {
+            guildId: listener.guildId,
+            commandType: listener.commandType,
+            targetPlayer: listener.targetPlayer,
+            resolvedAt: Date.now(),
+            result: result
+        });
+        
+        logger.debug(`[CMD-LISTENER] Added to recently resolved listeners: ${listenerId} (${listener.commandType} - ${listener.targetPlayer})`);
 
         // Clear timeout
         if (listener.timeout) {

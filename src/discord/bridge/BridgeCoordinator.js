@@ -1,8 +1,8 @@
-// BridgeCoordinator.js - Complete updated file with event logging functionality
-
 // Specific Imports
 const BridgeLocator = require("../../bridgeLocator.js");
 const logger = require("../../shared/logger");
+
+const CommandResponseListener = require("../client/handlers/CommandResponseListener.js");
 
 class BridgeCoordinator {
     constructor() {
@@ -39,7 +39,7 @@ class BridgeCoordinator {
         this.minecraftManager = minecraftManager;
 
         logger.debug(`[BRIDGE] Managers set - Discord: ${!!discordManager}, Minecraft: ${!!minecraftManager}`);
-
+        
         this.setupMinecraftToDiscordBridge();
         this.setupDiscordToMinecraftBridge();
 
@@ -109,16 +109,16 @@ class BridgeCoordinator {
     }
 
     /**
-     * Handle Minecraft guild message
-     * @param {object} messageData - Guild message data
+     * Handle Minecraft message (Minecraft to Discord bridging)
+     * @param {object} messageData - Minecraft message data
      */
     async handleMinecraftMessage(messageData) {
         try {
             logger.debug(`[MC→DC] Processing message: ${JSON.stringify(messageData)}`);
             
-            // Skip if message bridging is disabled
-            if (!this.routingConfig.guildChatToDiscord && !this.routingConfig.officerChatToDiscord) {
-                logger.debug(`[MC→DC] Message bridging disabled, skipping message`);
+            // Skip if Discord manager is not connected
+            if (!this.discordManager.isConnected()) {
+                logger.warn(`[MC→DC] Discord not connected, skipping message`);
                 return;
             }
 
@@ -129,18 +129,10 @@ class BridgeCoordinator {
                 return;
             }
 
-            logger.discord(`[MC→DC] Processing ${messageData.chatType} message from ${guildConfig.name}: ${messageData.username}`);
-
-            // Check if Discord manager is ready
-            if (!this.discordManager.isConnected()) {
-                logger.warn(`[MC→DC] Discord not connected, skipping message`);
-                return;
-            }
+            logger.discord(`[MC→DC] Processing message from ${guildConfig.name}: ${messageData.username}`);
 
             // Send to Discord
-            logger.debug(`[MC→DC] Sending message to Discord...`);
-            const result = await this.discordManager.sendGuildMessage(messageData, guildConfig);
-            logger.debug(`[MC→DC] Discord send result: ${JSON.stringify(result)}`);
+            await this.discordManager.sendGuildMessage(messageData, guildConfig);
 
             logger.discord(`[MC→DC] ✅ Message successfully bridged to Discord`);
 
@@ -150,7 +142,7 @@ class BridgeCoordinator {
     }
 
     /**
-     * Handle Minecraft guild event (UPDATED with logging)
+     * Handle Minecraft guild event (UPDATED with double-logging prevention)
      * @param {object} eventData - Parsed guild event data
      */
     async handleMinecraftEvent(eventData) {
@@ -183,10 +175,42 @@ class BridgeCoordinator {
             const result = await this.discordManager.sendGuildEvent(eventData, guildConfig);
             logger.debug(`[MC→DC] Discord event send result: ${JSON.stringify(result)}`);
 
-            logger.debug(`[MC→DC] Sending event log to Discord channels...`);
-            await this.sendEventLog(eventData, guildConfig);
+            // DOUBLE-LOGGING FIX: Check if there's an active Discord command listener for this event
+            logger.debug(`[MC→DC] ================================`);
+            logger.debug(`[MC→DC] DOUBLE-LOGGING CHECK START`);
+            logger.debug(`[MC→DC] Event: ${eventData.type} - Player: ${eventData.username} - Guild: ${eventData.guildId}`);
+            logger.debug(`[MC→DC] ================================`);
+            
+            const CommandResponseListener = require("../client/handlers/CommandResponseListener.js");
+            
+            // Check if CommandResponseListener class exists
+            logger.debug(`[MC→DC] CommandResponseListener class available: ${!!CommandResponseListener}`);
+            
+            // Check if singleton instance exists
+            logger.debug(`[MC→DC] CommandResponseListener.instance exists: ${!!CommandResponseListener.instance}`);
+            
+            // Try to get instance
+            let instance = null;
+            try {
+                instance = CommandResponseListener.getInstance();
+                logger.debug(`[MC→DC] Got singleton instance: ${!!instance}`);
+            } catch (error) {
+                logger.debug(`[MC→DC] Error getting singleton instance:`, error);
+            }
+            
+            const hasActiveListener = CommandResponseListener.hasActiveListenerForEvent(eventData);
+            logger.debug(`[MC→DC] ================================`);
+            logger.debug(`[MC→DC] FINAL RESULT: hasActiveListener = ${hasActiveListener}`);
+            logger.debug(`[MC→DC] ================================`);
+            
+            if (hasActiveListener) {
+                logger.debug(`[MC→DC] ✅ Skipping event log - Discord command listener will handle logging for ${eventData.type} event`);
+            } else {
+                logger.debug(`[MC→DC] ❌ No active listener found - sending event log to Discord channels...`);
+                await this.sendEventLog(eventData, guildConfig);
+            }
 
-            logger.discord(`[MC→DC] ✅ Event successfully bridged to Discord with logging`);
+            logger.discord(`[MC→DC] ✅ Event successfully bridged to Discord ${hasActiveListener ? 'without duplicate logging' : 'with logging'}`);
 
         } catch (error) {
             logger.logError(error, `Error bridging Minecraft event to Discord from guild ${eventData.guildId}`);
@@ -201,51 +225,33 @@ class BridgeCoordinator {
         try {
             logger.debug(`[MC→DC] Processing connection event: ${JSON.stringify(connectionData)}`);
             
-            // Skip if system message bridging is disabled
-            if (!this.routingConfig.systemMessagesToDiscord) {
-                logger.debug(`[MC→DC] System message bridging disabled, skipping connection event`);
-                return;
-            }
-
-            const guildId = connectionData.guildId || connectionData.guild;
-            if (!guildId) {
-                logger.warn(`No guild ID found in connection data`);
-                return;
-            }
-
-            // Get guild configuration
-            const guildConfig = this.getGuildConfig(guildId);
-            if (!guildConfig) {
-                logger.warn(`Guild configuration not found for connection event: ${guildId}`);
-                return;
-            }
-
-            logger.discord(`[MC→DC] Processing connection ${connectionData.type} for ${guildConfig.name}`);
-
-            // Check if Discord manager is ready
+            // Skip if Discord manager is not connected
             if (!this.discordManager.isConnected()) {
                 logger.warn(`[MC→DC] Discord not connected, skipping connection event`);
                 return;
             }
 
-            // Send connection status to Discord
-            logger.debug(`[MC→DC] Sending connection status to Discord...`);
-            const result = await this.discordManager.sendConnectionStatus(
-                connectionData.type, 
-                guildConfig, 
-                connectionData
-            );
-            logger.debug(`[MC→DC] Discord connection status send result: ${JSON.stringify(result)}`);
+            // Get guild configuration
+            const guildConfig = this.getGuildConfig(connectionData.guildId);
+            if (!guildConfig) {
+                logger.warn(`Guild configuration not found for connection event: ${connectionData.guildId}`);
+                return;
+            }
+
+            logger.discord(`[MC→DC] Processing ${connectionData.type} connection event from ${guildConfig.name}`);
+
+            // Send to Discord
+            await this.discordManager.sendConnectionEvent(connectionData, guildConfig);
 
             logger.discord(`[MC→DC] ✅ Connection event successfully bridged to Discord`);
 
         } catch (error) {
-            logger.logError(error, `Error bridging Minecraft connection to Discord from guild ${connectionData.guildId || connectionData.guild}`);
+            logger.logError(error, `Error bridging Minecraft connection event to Discord from guild ${connectionData.guildId}`);
         }
     }
 
     /**
-     * Handle Discord message
+     * Handle Discord message (Discord to Minecraft bridging)
      * @param {object} messageData - Discord message data
      */
     async handleDiscordMessage(messageData) {
@@ -386,7 +392,7 @@ class BridgeCoordinator {
             .setTitle(`${statusEmoji} ${this.capitalizeFirst(eventData.type)} Event Detected`)
             .setColor(statusColor)
             .setTimestamp()
-            .setFooter({ text: '🔧 Guild Command System' });
+            .setFooter({ text: '🔧 Guild Event System' });
 
         // Add guild information (same format as commands)
         embed.addFields({ 
@@ -405,16 +411,16 @@ class BridgeCoordinator {
                     // Format UUID with dashes (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
                     const formattedUUID = uuid.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
                     playerValue = `\`${eventData.username}\` • \`${formattedUUID}\``;
-        
-                    embed.addFields({ 
-                        name: '🎯 Target Player', 
-                        value: playerValue, 
-                        inline: false 
-                    });
                 }
             } catch (error) {
                 logger.debug(`Failed to fetch UUID for ${eventData.username}`, error);
             }
+        
+            embed.addFields({ 
+                name: '🎯 Target Player', 
+                value: playerValue, 
+                inline: false 
+            });
         }
 
         // Add event details (equivalent to "Response")
@@ -467,14 +473,14 @@ class BridgeCoordinator {
         // Add raw message if available (formatted like command logs)
         if (eventData.raw) {
             const rawMessage = eventData.raw.length > 500 ? eventData.raw.substring(0, 500) + '...' : eventData.raw;
-            details.push(`**Raw Message: **${rawMessage}`);
+            details.push(`**Raw Message:** \`${rawMessage}\``);
         }
 
         return details.length > 0 ? details.join('\n') : 'Event detected successfully';
     }
 
     /**
-     * Capitalize first letter of a string (matching command format)
+     * Capitalize first letter of a string
      * @param {string} str - String to capitalize
      * @returns {string} Capitalized string
      */
@@ -483,43 +489,79 @@ class BridgeCoordinator {
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
 
-    // ==================== HELPER METHODS ====================
-
     /**
-     * Get guild configuration by ID
+     * Get guild configuration by guild ID
      * @param {string} guildId - Guild ID
      * @returns {object|null} Guild configuration
      */
     getGuildConfig(guildId) {
-        const guilds = this.config.get('guilds') || [];
-        return guilds.find(guild => guild.id === guildId);
-    }
-
-    /**
-     * Add error reaction to Discord message
-     * @param {object} messageData - Original Discord message data
-     */
-    async addErrorReaction(messageData) {
         try {
-            if (!messageData.messageRef) {
-                logger.warn('Cannot add error reaction - message reference not available');
-                return;
-            }
-
-            const message = messageData.messageRef;
-            await message.react('❌');
-            
-            logger.debug(`Added error reaction to message from ${messageData.author.username}`);
+            const guildConfigs = this.config.get('guilds') || [];
+            return guildConfigs.find(guild => guild.id === guildId) || null;
         } catch (error) {
-            logger.logError(error, 'Failed to add error reaction');
+            logger.logError(error, `Error getting guild config for ID: ${guildId}`);
+            return null;
         }
     }
 
     /**
-     * Clean up bridge coordinator
+     * Add error reaction to Discord message
+     * @param {object} messageData - Discord message data
+     */
+    async addErrorReaction(messageData) {
+        try {
+            if (messageData.message && typeof messageData.message.react === 'function') {
+                await messageData.message.react('❌');
+            }
+        } catch (error) {
+            logger.debug('Failed to add error reaction:', error);
+        }
+    }
+
+    /**
+     * Cleanup all listeners
      */
     cleanup() {
-        logger.debug('BridgeCoordinator cleanup completed');
+        try {
+            try {
+                if (CommandResponseListener.instance) {
+                    CommandResponseListener.instance.cleanup();
+                }
+            } catch (error) {
+                logger.error('Error cleaning up CommandResponseListener:', error);
+            }
+            
+            // Reset manager references
+            if (this.discordManager) {
+                this.discordManager = null;
+            }
+            
+            if (this.minecraftManager) {
+                this.minecraftManager = null;
+            }
+            
+            // Reset routing configuration to defaults
+            this.routingConfig = {
+                guildChatToDiscord: true,
+                officerChatToDiscord: true,
+                eventsToDiscord: true,
+                discordToMinecraft: true,
+                systemMessagesToDiscord: true
+            };
+            
+            logger.bridge('✅ BridgeCoordinator cleanup completed');
+            
+        } catch (error) {
+            logger.logError(error, 'Error during BridgeCoordinator cleanup');
+        }
+    }
+
+    /**
+     * Get current routing configuration
+     * @returns {object} Current routing configuration
+     */
+    getRoutingConfig() {
+        return { ...this.routingConfig };
     }
 }
 
