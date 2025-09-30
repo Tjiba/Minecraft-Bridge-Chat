@@ -702,21 +702,12 @@ const {
     // Sort members based on the specified sort type
     const sortedMembers = sortMembers(members, sortType, config, guildName);
   
-    // Debug: Log first few members to see their guild ranks
-    logger.discord(
-      `[GUILD-LIST] DEBUG: First 10 members after sorting:`,
-      sortedMembers
-        .slice(0, 10)
-        .map((m) => `${m.name} (${m.guildRank || "Default"})`)
-    );
-  
     // Debug: Log rank distribution
     const rankCounts = {};
     sortedMembers.forEach((m) => {
       const rank = m.guildRank || "Default";
       rankCounts[rank] = (rankCounts[rank] || 0) + 1;
     });
-    logger.discord(`[GUILD-LIST] DEBUG: Rank distribution:`, rankCounts);
   
     // Calculate rank statistics
     const rankStats = calculateRankStatistics(sortedMembers);
@@ -1352,13 +1343,6 @@ const {
       while ((match = rankPattern.exec(trimmedLine)) !== null) {
         const hypixelRank = match[1] ? match[1].trim() : "";
         const playerName = match[2] ? match[2].trim() : "";
-        console.log(
-          "DEBUG: Found player with rank:",
-          playerName,
-          hypixelRank,
-          "in guild rank:",
-          currentGuildRank
-        );
   
         if (
           playerName &&
