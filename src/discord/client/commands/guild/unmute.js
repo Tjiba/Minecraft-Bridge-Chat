@@ -30,8 +30,8 @@
  * 
  * Required permissions: moderator
  * Command formats:
- * - Global: /guild unmute <guildname> global
- * - Player: /guild unmute <guildname> player <username>
+ * - Global: /guild unmute FrenchLegacy global
+ * - Player: /guild unmute FrenchLegacy player Panda_Sauvage
  * 
  * @author Fabien83560
  * @version 1.0.0

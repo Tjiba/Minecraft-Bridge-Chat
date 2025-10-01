@@ -26,7 +26,7 @@
  * direct assignment to any valid rank in the guild hierarchy.
  * 
  * Required permissions: moderator
- * Command format: /guild setrank <guildname> <username> <rank>
+ * Command format: /guild setrank FrenchLegacy Panda_Sauvage Veteran
  * 
  * @author Fabien83560
  * @version 1.0.0

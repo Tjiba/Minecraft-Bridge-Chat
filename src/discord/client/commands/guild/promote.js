@@ -21,7 +21,7 @@
  * 5. Display result to user with formatted embed (success, timeout, or error)
  * 
  * Required permissions: moderator
- * Command format: /guild promote <guildname> <username>
+ * Command format: /guild promote FrenchLegacy Panda_Sauvage
  * 
  * @author Fabien83560
  * @version 1.0.0

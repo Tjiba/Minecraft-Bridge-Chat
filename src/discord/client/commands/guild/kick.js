@@ -46,8 +46,8 @@
  * Response: Ephemeral (only visible to command executor)
  * 
  * Example:
- * /guild kick FrenchLegacy PlayerName Inactivity for 30+ days
- * Result: Kicks PlayerName from FrenchLegacy with reason logged
+ * /guild kick FrenchLegacy Panda_Sauvage Inactivity for 30+ days
+ * Result: Kicks Panda_Sauvage from FrenchLegacy with reason logged
  * 
  * Possible Outcomes:
  * - Success: Player is removed from guild, reason logged in guild logs

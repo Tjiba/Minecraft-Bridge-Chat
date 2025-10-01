@@ -45,8 +45,8 @@
  * Response: Ephemeral (only visible to command executor)
  * 
  * Example:
- * /guild invite FrenchLegacy PlayerName
- * Result: Sends invitation to PlayerName to join FrenchLegacy guild
+ * /guild invite FrenchLegacy Panda_Sauvage
+ * Result: Sends invitation to Panda_Sauvage to join FrenchLegacy guild
  * 
  * Possible Outcomes:
  * - Success: Player receives invitation in-game

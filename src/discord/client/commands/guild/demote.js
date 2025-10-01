@@ -43,8 +43,8 @@
  * Response: Ephemeral (only visible to command executor)
  * 
  * Example:
- * /guild demote FrenchLegacy PlayerName
- * Result: Demotes PlayerName to the previous rank in FrenchLegacy guild
+ * /guild demote FrenchLegacy Panda_Sauvage
+ * Result: Demotes Panda_Sauvage to the previous rank in FrenchLegacy guild
  * 
  * @author Fabien83560
  * @version 1.0.0

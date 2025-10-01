@@ -70,7 +70,7 @@
  * - /guild list FrenchLegacy offline
  *   Shows all offline members
  * 
- * - /guild list FrenchLegacy all rank
+ * - /guild list FrenchLegacy all
  *   Shows all members sorted by rank
  * 
  * @author Panda_Sauvage

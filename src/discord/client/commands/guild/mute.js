@@ -72,8 +72,8 @@
  * - /guild mute FrenchLegacy global 1h
  *   Result: Mutes entire guild chat for 1 hour
  * 
- * - /guild mute FrenchLegacy player 30m PlayerName
- *   Result: Mutes PlayerName in guild chat for 30 minutes
+ * - /guild mute FrenchLegacy player 30m Panda_Sauvage
+ *   Result: Mutes Panda_Sauvage in guild chat for 30 minutes
  * 
  * @author Fabien83560
  * @version 1.0.0
