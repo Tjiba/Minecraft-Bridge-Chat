@@ -1,0 +1,78 @@
+name: Notify Discord on Push
+
+on:
+  push:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Send push notification to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          REPO="${{ github.repository }}"
+          BRANCH="${{ github.ref_name }}"
+          AUTHOR="${{ github.actor }}"
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_URL="${{ github.event.head_commit.url }}"
+          AVATAR_URL="https://github.com/${AUTHOR}.png"
+          TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+
+          CHANGED_FILES=$(git diff --stat HEAD~1 HEAD | tail -1 | awk '{print $1}')
+          LINES_ADDED=$(git diff --stat HEAD~1 HEAD | tail -1 | awk '{print $4}')
+          LINES_DELETED=$(git diff --stat HEAD~1 HEAD | tail -1 | awk '{print $6}')
+          TOTAL_LINES=$((LINES_ADDED + LINES_DELETED))
+
+          CHANGED_FILES=${CHANGED_FILES:-0}
+          LINES_ADDED=${LINES_ADDED:-0}
+          LINES_DELETED=${LINES_DELETED:-0}
+          TOTAL_LINES=${TOTAL_LINES:-0}
+
+          JSON_PAYLOAD=$(jq -n \
+            --arg repo "$REPO" \
+            --arg branch "$BRANCH" \
+            --arg author "$AUTHOR" \
+            --arg msg "$COMMIT_MSG" \
+            --arg url "$COMMIT_URL" \
+            --arg avatar "$AVATAR_URL" \
+            --arg time "$TIMESTAMP" \
+            --arg changed "$CHANGED_FILES" \
+            --arg added "$LINES_ADDED" \
+            --arg deleted "$LINES_DELETED" \
+            --arg total "$TOTAL_LINES" \
+            '{
+              "username": "GitHub",
+              "avatar_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+              "embeds": [{
+                "title": "🚀 New push to \($repo)",
+                "url": $url,
+                "color": 5814783,
+                "author": {
+                  "name": $author,
+                  "icon_url": $avatar
+                },
+                "fields": [
+                  {"name": "📂 Repository", "value": $repo, "inline": true},
+                  {"name": "🌿 Branch", "value": $branch, "inline": true},
+                  {"name": "📝 Commit", "value": $msg},
+                  {"name": "📊 Changes", "value": "Files changed: **\($changed)**\nAdditions: **\($added)**\nDeletions: **\($deleted)**\nTotal lines changed: **\($total)**"}
+                ],
+                "footer": {
+                  "text": "GitHub Action • \($time)"
+                }
+              }]
+            }')
+
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "$JSON_PAYLOAD" \
+               $DISCORD_WEBHOOK
