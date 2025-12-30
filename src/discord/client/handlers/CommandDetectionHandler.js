@@ -348,6 +348,11 @@ class CommandDetectionHandler {
                 if (args.length >= 3) options.username = args[2];
                 if (args.length >= 4) options.rank = args[3];
                 break;
+            
+            case 'info':
+                // Info command: /guild info <guildname>
+                // Only requires guildname, which is already set above
+                break;
                 
             default:
                 return {

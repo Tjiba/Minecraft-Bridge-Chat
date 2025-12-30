@@ -91,6 +91,7 @@ All guild commands use the base `/guild` command:
 - **unmute.js** - Unmute guild member
 - **setrank.js** - Set player's guild rank
 - **execute.js** - Execute arbitrary guild command
+- **info.js** - Show the guild informations
 
 **Command Structure:**
 ```javascript

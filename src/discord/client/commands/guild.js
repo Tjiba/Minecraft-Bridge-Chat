@@ -25,6 +25,7 @@
  * - unmute: Unmute guild chat (global or specific player)
  * - execute: Execute custom guild command
  * - list: List guild members (online, offline, or all)
+ * - info: Display guild information (name, creation date, members, description, exp, level, online)
  * 
  * Architecture:
  * - GuildCommandManager: Singleton class managing subcommand loading and execution
@@ -258,6 +259,9 @@ module.exports = {
      * 9. list - List guild members
      *    Required: guildname (autocomplete), type (online/offline/all)
      * 
+     * 10. info - Display guild information
+     *     Required: guildname (autocomplete)
+     * 
      * @type {SlashCommandBuilder}
      */
     data: new SlashCommandBuilder()
@@ -459,6 +463,18 @@ module.exports = {
                 { name: "All members", value: "all" }
               )
           )
+    )
+    .addSubcommand((subcommand) =>
+        subcommand
+            .setName("info")
+            .setDescription("Display guild information (name, creation date, members, description, exp, level, online)")
+            .addStringOption((option) =>
+                option
+                    .setName("guildname")
+                    .setDescription("Name of the guild")
+                    .setRequired(true)
+                    .setAutocomplete(true)
+            )
     ),
     
     /**
