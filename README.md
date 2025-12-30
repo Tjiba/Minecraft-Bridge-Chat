@@ -94,6 +94,7 @@ The bot provides several slash commands:
 - `/guild mute <guild> <scope> <time> <player>` - Mute a guild member
 - `/guild unmute <guild> <scope> <player>` - Unmute a guild member
 - `/guild setrank <guild> <player> <rank>` - Set a player's guild rank
+- `/guild info <guild>` - Get the guild informations
 
 ### Message Flow
 
