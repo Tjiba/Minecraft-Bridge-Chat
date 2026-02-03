@@ -1,0 +1,19 @@
+services:
+  frenchlegacy-bridge-chat:
+    container_name: frenchlegacy-bridge-chat
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./config/settings.json:/app/config/settings.json:ro
+      - bridge_data:/app/data
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  bridge_data:
+    driver: local
