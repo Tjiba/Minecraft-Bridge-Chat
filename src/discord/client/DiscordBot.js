@@ -306,7 +306,7 @@ class DiscordBot extends EventEmitter {
             
             if (activityConfig.enabled !== false) {
                 const activity = {
-                    name: activityConfig.name || 'Minecraft Bridge',
+                    name: 'Made by Fabien83560',
                     type: ActivityType[activityConfig.type] || ActivityType.Playing
                 };
 
