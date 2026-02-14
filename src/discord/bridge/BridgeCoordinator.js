@@ -417,6 +417,7 @@ class BridgeCoordinator {
      * @param {object} messageData.author - Message author information
      * @param {string} messageData.author.displayName - Display name of author
      * @param {string} messageData.author.username - Username of author
+     * @param {string} messageData.author.minecraftUsername - Minecraft username extracted from display name
      * @param {string} messageData.content - Message content
      * @param {string} messageData.channelType - Channel type ('chat' or 'staff')
      * @param {object} messageData.message - Discord.js message object for reactions
@@ -455,6 +456,43 @@ class BridgeCoordinator {
                 const error = new Error('Minecraft manager not ready');
                 await this.handleBridgeError(messageData, error, 0, 0);
                 return;
+            }
+
+            // Extract Minecraft username from Discord server nickname
+            try {
+                if (messageData.messageRef && messageData.messageRef.guildId && messageData.author.id) {
+                    // Find Discord client (try common property names)
+                    const discordClient = this.discordManager.getClient();
+                    
+                    if (!discordClient) {
+                        throw new Error('Discord client not found in BridgeCoordinator');
+                    }
+                    
+                    // Fetch guild and member to get server nickname
+                    const guild = await discordClient.guilds.fetch(messageData.messageRef.guildId);
+                    const member = await guild.members.fetch(messageData.author.id);
+                    const serverNickname = member.displayName;
+                    
+                    // Parse format: "[number] Username"
+                    const minecraftUsernameMatch = serverNickname.match(/^\[\d+\]\s*(.+)$/);
+                    if (minecraftUsernameMatch) {
+                        messageData.author.minecraftUsername = minecraftUsernameMatch[1];
+                        logger.debug(`[DC→MC] Extracted Minecraft username: ${messageData.author.minecraftUsername} from server nickname: ${serverNickname}`);
+                    } else {
+                        // Fallback to server nickname if format doesn't match
+                        messageData.author.minecraftUsername = serverNickname;
+                        logger.debug(`[DC→MC] Using server nickname as Minecraft username: ${serverNickname}`);
+                    }
+                } else {
+                    // Fallback to Discord username if guild info not available
+                    messageData.author.minecraftUsername = messageData.author.username;
+                    logger.debug(`[DC→MC] Using Discord username as fallback: ${messageData.author.username}`);
+                }
+            } catch (error) {
+                // Fallback to Discord username on error
+                logger.logError(error, `Failed to fetch guild member for Minecraft username extraction`);
+                messageData.author.minecraftUsername = messageData.author.username;
+                logger.debug(`[DC→MC] Using Discord username as fallback after error: ${messageData.author.username}`);
             }
 
             // Determine target chat type based on Discord channel
@@ -633,9 +671,9 @@ class BridgeCoordinator {
      * Format Discord message for Minecraft
      * 
      * Formats a Discord message for display in Minecraft guild chat. Adds a
-     * "Discord >" prefix to distinguish bridged messages from native Minecraft chat.
+     * "D >" prefix to distinguish bridged messages from native Minecraft chat.
      * 
-     * Format: `Discord > Username: message content`
+     * Format: `D > Username: message content`
      * 
      * @param {object} messageData - Discord message data
      * @param {object} messageData.author - Message author
@@ -650,16 +688,16 @@ class BridgeCoordinator {
      *   author: { displayName: "User123" },
      *   content: "Hello world!"
      * }, 'guild');
-     * // Returns: "Discord > User123: Hello world!"
+     * // Returns: "D > User123: Hello world!"
      */
     formatDiscordMessageForMinecraft(messageData, chatType) {
-        const username = messageData.author.displayName || messageData.author.username;
+        const username = messageData.author.minecraftUsername || messageData.author.displayName || messageData.author.username;
         const content = messageData.content;
         
         // Add Discord prefix to distinguish from native Minecraft messages
-        const prefix = "Discord >";
+        const prefix = "D >";
         
-        // Format: Discord > Username: message content
+        // Format: D > Username: message content
         return `${prefix} ${username}: ${content}`;
     }
 
