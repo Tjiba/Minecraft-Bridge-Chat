@@ -29,9 +29,9 @@
           },
           "welcome": {
             "basic": "Welcome to {username}",
-            "withTag": "Welcome to {username} in the {tag}",
-            "withSourceTag": "Welcome to {username} in the {tag}",
-            "withBothTags": "Welcome to {username} in the {tag}"
+            "withTag": "Welcome to {username} in the guild !",
+            "withSourceTag": "Welcome to {username} in the guild !",
+            "withBothTags": "Welcome to {username} in the guild !"
           },
           "kick": {
             "basic": "{username} was kicked from the guild",
