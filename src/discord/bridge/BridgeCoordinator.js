@@ -800,11 +800,12 @@ class BridgeCoordinator {
                 return;
             }
 
-            // Create embed for the event log
-            const embed = await this.createEventLogEmbed(eventData, guildConfig);
-
-            // Send the log
-            await channel.send({ embeds: [embed] });
+            if(eventData.type !== "online") {
+                // Create embed for the event log
+                const embed = await this.createEventLogEmbed(eventData, guildConfig);
+                // Send the log
+                await channel.send({ embeds: [embed] });
+            }
 
             logger.discord(`[EVENT-LOG] Logged ${eventData.type} event to Discord channel ${channel.name}`);
 
