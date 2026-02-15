@@ -135,56 +135,42 @@ class MessageHandler extends EventEmitter {
      * 
      * @async
      * @private
-     * @throws {Error} If channels are not found or configuration is invalid
+     * @throws {Error} If channel IDs are invalid or channels cannot be fetched
      */
     async validateAndCacheChannels() {
-        if (!this.client) {
-            throw new Error('Discord client not available for channel validation');
-        }
-
-        const bridgeConfig = this.config.get('bridge.channels');
-
-        if (!bridgeConfig) {
-            throw new Error('Bridge channels configuration not found');
-        }
-
         try {
-            // Validate chat channel
-            if (!bridgeConfig.chat || !bridgeConfig.chat.id) {
-                throw new Error('Chat channel ID not configured');
+            const bridgeConfig = this.config.get('bridge.channels');
+
+            // Fetch and cache chat channel
+            if (bridgeConfig.chat && bridgeConfig.chat.id) {
+                this.channels.chat = await this.client.channels.fetch(bridgeConfig.chat.id);
+                if (!this.channels.chat) {
+                    throw new Error('Chat channel not found');
+                }
+                logger.debug(`Chat channel validated: ${this.channels.chat.name}`);
             }
 
-            const chatChannel = await this.client.channels.fetch(bridgeConfig.chat.id);
-            if (!chatChannel) {
-                throw new Error(`Chat channel not found: ${bridgeConfig.chat.id}`);
+            // Fetch and cache staff channel
+            if (bridgeConfig.staff && bridgeConfig.staff.id) {
+                this.channels.staff = await this.client.channels.fetch(bridgeConfig.staff.id);
+                if (!this.channels.staff) {
+                    throw new Error('Staff channel not found');
+                }
+                logger.debug(`Staff channel validated: ${this.channels.staff.name}`);
             }
-            this.channels.chat = chatChannel;
-
-            // Validate staff channel
-            if (!bridgeConfig.staff || !bridgeConfig.staff.id) {
-                throw new Error('Staff channel ID not configured');
-            }
-
-            const staffChannel = await this.client.channels.fetch(bridgeConfig.staff.id);
-            if (!staffChannel) {
-                throw new Error(`Staff channel not found: ${bridgeConfig.staff.id}`);
-            }
-            this.channels.staff = staffChannel;
-
-            logger.discord(`Validated Discord channels - Chat: ${chatChannel.name}, Staff: ${staffChannel.name}`);
 
         } catch (error) {
-            logger.logError(error, 'Failed to validate Discord channels');
+            logger.logError(error, 'Failed to validate and cache channels');
             throw error;
         }
     }
 
-    // ==================== MESSAGE HANDLING ====================
+    // ==================== MESSAGE PROCESSING ====================
 
     /**
      * Handle incoming Discord message
      * 
-     * Main entry point for processing Discord messages. Filters out bot messages,
+     * Main entry point for Discord message processing. Filters out bot messages,
      * validates channel source, detects commands, and processes regular messages
      * for bridging to Minecraft. Includes error handling with reaction feedback.
      * 
@@ -255,7 +241,7 @@ class MessageHandler extends EventEmitter {
             }
 
             // Clean and process message content
-            const cleanedContent = this.cleanMessageContent(message.content);
+            const cleanedContent = await this.cleanMessageContent(message.content, message);
             if (!cleanedContent || cleanedContent.trim().length === 0) {
                 return; // Nothing to bridge after cleaning
             }
@@ -351,7 +337,7 @@ class MessageHandler extends EventEmitter {
                     bot: messageObject.author.bot || false
                 },
                 content: messageObject.content,
-                cleanedContent: this.cleanMessageContent(messageObject.content),
+                cleanedContent: messageObject.content,
                 timestamp: messageObject.timestamp || new Date(),
                 id: messageObject.id,
                 guild: messageObject.guild ? {
@@ -393,29 +379,26 @@ class MessageHandler extends EventEmitter {
                 case 'ping':
                     await message.reply('🏓 Pong! Bridge is running.');
                     break;
-                
                 case 'status':
                     await this.handleStatusCommand(message);
                     break;
-                
                 case 'help':
                     await this.handleHelpCommand(message);
                     break;
-                
                 default:
-                    await message.reply(`❌ Unknown command: \`${command}\`. Use \`${this.commandPrefix}help\` for available commands.`);
+                    await message.reply(`Unknown command: ${command}. Type \`${this.commandPrefix}help\` for available commands.`);
             }
 
         } catch (error) {
             logger.logError(error, `Error handling command from ${message.author.username}`);
-            await message.reply('❌ An error occurred while processing your command.');
+            await message.reply('❌ An error occurred while processing the command.');
         }
     }
 
     /**
      * Handle status command
      * 
-     * Displays the current bridge connection status with an embed.
+     * Shows current bridge connection status.
      * 
      * @async
      * @private
@@ -423,24 +406,15 @@ class MessageHandler extends EventEmitter {
      */
     async handleStatusCommand(message) {
         try {
-            // This would integrate with your bridge status
-            const embed = {
-                color: 0x00FF00,
-                title: '🔗 Bridge Status',
-                fields: [
-                    {
-                        name: 'Discord Connection',
-                        value: '✅ Connected',
-                        inline: true
-                    },
-                    {
-                        name: 'Minecraft Connections',
-                        value: 'ℹ️ Check logs for details',
-                        inline: true
-                    }
-                ],
-                timestamp: new Date().toISOString()
-            };
+            const embed = new DiscordEmbedBuilder()
+                .setColor(0x00FF00)
+                .setTitle('🟢 Bridge Status')
+                .setDescription('The Discord-Minecraft bridge is active')
+                .addFields(
+                    { name: 'Discord Bot', value: '✅ Connected', inline: true },
+                    { name: 'Channels', value: `Chat: ${this.channels.chat ? '✅' : '❌'}\nStaff: ${this.channels.staff ? '✅' : '❌'}`, inline: true }
+                )
+                .setTimestamp();
 
             await message.reply({ embeds: [embed] });
         } catch (error) {
@@ -496,14 +470,16 @@ class MessageHandler extends EventEmitter {
     /**
      * Clean message content for Minecraft compatibility
      * 
-     * Removes Discord-specific formatting, converts mentions to plain text,
+     * Removes Discord-specific formatting, converts mentions to Discord display names,
      * handles emojis, and truncates to Minecraft's character limit (200 chars).
      * 
+     * @async
      * @private
      * @param {string} content - Original Discord message content
-     * @returns {string} Cleaned message content suitable for Minecraft
+     * @param {Message} message - Discord message object (for resolving mentions)
+     * @returns {Promise<string>} Cleaned message content suitable for Minecraft
      */
-    cleanMessageContent(content) {
+    async cleanMessageContent(content, message) {
         if (!content) return '';
 
         let cleaned = content;
@@ -517,10 +493,58 @@ class MessageHandler extends EventEmitter {
         cleaned = cleaned.replace(/__([^_]+)__/g, '$1'); // Underline
         cleaned = cleaned.replace(/\|\|([^|]+)\|\|/g, '[spoiler]'); // Spoilers
 
-        // Convert mentions to readable format
-        cleaned = cleaned.replace(/<@!?(\d+)>/g, '@user'); // User mentions
-        cleaned = cleaned.replace(/<#(\d+)>/g, '#channel'); // Channel mentions
-        cleaned = cleaned.replace(/<@&(\d+)>/g, '@role'); // Role mentions
+        // Convert user mentions to Discord display names
+        if (message && message.guild) {
+            // Find all user mentions in the message
+            const userMentionRegex = /<@!?(\d+)>/g;
+            let match;
+            const mentionReplacements = [];
+
+            while ((match = userMentionRegex.exec(content)) !== null) {
+                const userId = match[1];
+                const fullMatch = match[0];
+                
+                try {
+                    // Fetch the member from the guild to get their display name
+                    const member = await message.guild.members.fetch(userId);
+                    if (member) {
+                        // Use displayName which is the server nickname or username
+                        mentionReplacements.push({
+                            original: fullMatch,
+                            replacement: `@${member.displayName}`
+                        });
+                        logger.debug(`Resolved mention ${userId} to @${member.displayName}`);
+                    } else {
+                        // Fallback if member not found
+                        mentionReplacements.push({
+                            original: fullMatch,
+                            replacement: '@user'
+                        });
+                    }
+                } catch (error) {
+                    logger.debug(`Failed to fetch member ${userId}: ${error.message}`);
+                    // Fallback to @user if fetch fails
+                    mentionReplacements.push({
+                        original: fullMatch,
+                        replacement: '@user'
+                    });
+                }
+            }
+
+            // Apply all mention replacements
+            for (const replacement of mentionReplacements) {
+                cleaned = cleaned.replace(replacement.original, replacement.replacement);
+            }
+        } else {
+            // Fallback if no guild context
+            cleaned = cleaned.replace(/<@!?(\d+)>/g, '@user');
+        }
+
+        // Convert channel mentions to readable format
+        cleaned = cleaned.replace(/<#(\d+)>/g, '#channel');
+        
+        // Convert role mentions to readable format
+        cleaned = cleaned.replace(/<@&(\d+)>/g, '@role');
 
         // Convert custom emojis to names
         cleaned = cleaned.replace(/<a?:(\w+):\d+>/g, ':$1:');
