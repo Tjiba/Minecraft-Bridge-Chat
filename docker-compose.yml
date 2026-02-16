@@ -7,6 +7,8 @@ services:
     volumes:
       - ./config/settings.json:/app/config/settings.json:ro
       - bridge_data:/app/data
+    environment:
+      - TZ=Europe/Paris
     restart: unless-stopped
     logging:
       driver: json-file

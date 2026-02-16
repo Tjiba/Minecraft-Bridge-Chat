@@ -105,7 +105,12 @@ class FileLogger {
 	 */
 	getLogFileName() {
 		const date = new Date();
-		const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+		
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		const dateString = `${year}-${month}-${day}`; // YYYY-MM-DD
+		
 		return path.join(this.logDir, `bridge-${dateString}.log`);
 	}
 	
@@ -123,7 +128,12 @@ class FileLogger {
 	 */
 	getErrorLogFileName() {
 		const date = new Date();
-		const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+		
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		const dateString = `${year}-${month}-${day}`; // YYYY-MM-DD
+		
 		return path.join(this.logDir, `bridge-${dateString}-errors.log`);
 	}
 	
@@ -236,17 +246,26 @@ class FileLogger {
 	 */
 	rotateLogFile(filePath, isErrorFile = false) {
 		try {
-			const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+			// Créer un timestamp local au format YYYY-MM-DD-HH-mm-ss
+			const date = new Date();
+			const year = date.getFullYear();
+			const month = String(date.getMonth() + 1).padStart(2, '0');
+			const day = String(date.getDate()).padStart(2, '0');
+			const hours = String(date.getHours()).padStart(2, '0');
+			const minutes = String(date.getMinutes()).padStart(2, '0');
+			const seconds = String(date.getSeconds()).padStart(2, '0');
+			const timestamp = `${year}-${month}-${day}-${hours}-${minutes}-${seconds}`;
+			
 			const rotatedFileName = filePath.replace('.log', `-${timestamp}.log`);
 			
-			// Rename current file
+			// Renommer le fichier actuel
 			fs.renameSync(filePath, rotatedFileName);
 			
-			// Clean old files (both regular and error files)
+			// Nettoyer les anciens fichiers
 			this.cleanOldLogFiles();
 			
 		} catch (error) {
-			console.error('Error rotating log file:', error.message);
+			console.error('Erreur de rotation du fichier de log:', error.message);
 		}
 	}
 	
