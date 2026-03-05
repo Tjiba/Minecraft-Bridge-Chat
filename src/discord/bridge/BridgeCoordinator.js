@@ -391,7 +391,7 @@ class BridgeCoordinator {
             logger.discord(`[MC→DC] Processing ${connectionData.type} connection event from ${guildConfig.name}`);
 
             // Send to Discord
-            await this.discordManager.sendConnectionEvent(connectionData, guildConfig);
+            await this.discordManager.sendConnectionStatus(connectionData.guildId, connectionData.type, connectionData.details || {});
 
             logger.discord(`[MC→DC] ✅ Connection event successfully bridged to Discord`);
 
