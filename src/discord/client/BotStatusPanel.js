@@ -50,6 +50,7 @@ class BotStatusPanel {
         this.client = null;
         this.channel = null;
         this.panelMessage = null;
+        this._refreshInterval = null;
 
         // Per-guild status history
         // guildId -> { status, lastConnected, lastDisconnected, lastCrash,
@@ -79,6 +80,12 @@ class BotStatusPanel {
         await this._findOrCreatePanel();
 
         this._setupButtonListener();
+
+        this._refreshInterval = setInterval(() => {
+            this.updatePanel().catch(err =>
+                logger.logError(err, 'BotStatusPanel: Periodic refresh failed')
+            );
+        }, 5 * 60 * 1000);
 
         logger.discord('BotStatusPanel initialized');
     }
@@ -622,6 +629,10 @@ class BotStatusPanel {
      * Cleanup resources (nullify references).
      */
     cleanup() {
+        if (this._refreshInterval) {
+            clearInterval(this._refreshInterval);
+            this._refreshInterval = null;
+        }
         this.client = null;
         this.channel = null;
         this.panelMessage = null;
