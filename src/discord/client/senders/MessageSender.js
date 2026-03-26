@@ -52,6 +52,7 @@ const BridgeLocator = require("../../../bridgeLocator.js");
 const MessageFormatter = require("../../../shared/MessageFormatter.js");
 const WebhookSender = require("./WebhookSender.js");
 const EmbedBuilder = require("../../utils/EmbedBuilder.js");
+const BotStatusPanel = require("../BotStatusPanel.js");
 const logger = require("../../../shared/logger");
 
 /**
@@ -81,6 +82,8 @@ class MessageSender {
             staff: null,
             statusLog: null
         };
+
+        this.botStatusPanel = null;
 
         // Rate limiting
         this.rateLimiter = new Map(); // channelId -> last message times
@@ -155,6 +158,12 @@ class MessageSender {
             // Initialize webhook sender if enabled
             if (this.webhookSender) {
                 await this.webhookSender.initialize(client);
+            }
+
+            // Initialize bot status panel in the status log channel (if configured)
+            if (this.channels.statusLog) {
+                this.botStatusPanel = new BotStatusPanel();
+                await this.botStatusPanel.initialize(client, this.channels.statusLog);
             }
 
             logger.discord('MessageSender initialized with Discord client');
@@ -437,8 +446,15 @@ class MessageSender {
         }
 
         try {
-            const channel = this.channels.statusLog || this.channels.chat;
+            // Update the bot status panel (if initialized) — panel is the primary UI
+            if (this.botStatusPanel) {
+                this.botStatusPanel.onConnectionEvent(guildConfig.id, status, details);
+                logger.discord(`[DISCORD] Bot status panel updated: ${guildConfig.name} → ${status}`);
+                return;
+            }
 
+            // Fallback: send a plain message when no panel is available
+            const channel = this.channels.statusLog || this.channels.chat;
             if (!channel) {
                 throw new Error('Discord chat channel not available');
             }
@@ -451,32 +467,45 @@ class MessageSender {
                     message = `✅ **${guildConfig.name}** bot connected to Hypixel`;
                     embed = this.embedBuilder.createConnectionEmbed(guildConfig, status, details);
                     break;
-                    
-                case 'disconnected':
+
+                case 'disconnected': {
                     const reason = details.reason ? ` (${details.reason})` : '';
                     message = `❌ **${guildConfig.name}** bot disconnected from Hypixel${reason}`;
                     embed = this.embedBuilder.createConnectionEmbed(guildConfig, status, details);
                     break;
-                    
+                }
+
                 case 'reconnecting':
                     message = `🔄 **${guildConfig.name}** bot reconnecting to Hypixel...`;
                     break;
-                    
-                case 'error':
+
+                case 'reconnected':
+                    message = `🔄 **${guildConfig.name}** bot reconnected to Hypixel`;
+                    embed = this.embedBuilder.createConnectionEmbed(guildConfig, status, details);
+                    break;
+
+                case 'error': {
                     const errorMsg = details.error ? ` - ${details.error}` : '';
                     message = `⚠️ **${guildConfig.name}** connection error${errorMsg}`;
                     embed = this.embedBuilder.createConnectionEmbed(guildConfig, status, details);
                     break;
-                    
+                }
+
+                case 'manual_disconnect':
+                    message = `🔌 **${guildConfig.name}** bot manually disconnected`;
+                    break;
+
+                case 'manual_reconnect':
+                    message = `🔄 **${guildConfig.name}** bot manually reconnected to Hypixel`;
+                    embed = this.embedBuilder.createConnectionEmbed(guildConfig, 'connected', details);
+                    break;
+
                 default:
                     message = `ℹ️ **${guildConfig.name}** status: ${status}`;
             }
 
-            // Send the message
             const result = await this.sendViaChannel(message, channel, embed);
-
-            logger.discord(`[DISCORD] Sent connection status to chat channel: "${message}"`);
-
+            logger.discord(`[DISCORD] Sent connection status: "${message}"`);
             return result;
 
         } catch (error) {
@@ -655,9 +684,14 @@ class MessageSender {
      */
     cleanup() {
         this.rateLimiter.clear();
-        
+
         if (this.webhookSender) {
             this.webhookSender.cleanup();
+        }
+
+        if (this.botStatusPanel) {
+            this.botStatusPanel.cleanup();
+            this.botStatusPanel = null;
         }
 
         this.client = null;

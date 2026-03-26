@@ -745,6 +745,51 @@ class MinecraftManager {
         return this._bridgeCoordinator;
     }
 
+    // ==================== Manual Bot Control Methods ====================
+
+    /**
+     * Manually disconnect a specific guild bot.
+     *
+     * Prevents automatic reconnection until manualStart() is called.
+     *
+     * @async
+     * @param {string} guildId - Guild ID to disconnect
+     * @returns {Promise<void>}
+     */
+    async manualStop(guildId) {
+        if (!this._botManager) {
+            throw new Error('MinecraftManager not started');
+        }
+        return this._botManager.manualStop(guildId);
+    }
+
+    /**
+     * Manually reconnect a specific guild bot.
+     *
+     * Clears the manual-disconnect flag so auto-reconnect resumes on future crashes.
+     *
+     * @async
+     * @param {string} guildId - Guild ID to reconnect
+     * @returns {Promise<void>}
+     */
+    async manualStart(guildId) {
+        if (!this._botManager) {
+            throw new Error('MinecraftManager not started');
+        }
+        return this._botManager.manualStart(guildId);
+    }
+
+    /**
+     * Check whether a guild bot was manually disconnected.
+     *
+     * @param {string} guildId - Guild ID to check
+     * @returns {boolean}
+     */
+    isManuallyDisconnected(guildId) {
+        if (!this._botManager) return false;
+        return this._botManager.isManuallyDisconnected(guildId);
+    }
+
     // ==================== Inter-Guild Configuration Methods ====================
     
     /**

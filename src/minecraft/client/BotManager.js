@@ -85,6 +85,10 @@ class BotManager extends EventEmitter {
         this.messageCoordinator = new MessageCoordinator();
         this.interGuildManager = new InterGuildManager();
 
+        // Guilds that were intentionally disconnected by a user action.
+        // Automatic reconnection is suppressed for guilds in this set.
+        this.manuallyDisconnected = new Set();
+
         this.initialize();
     }
 
@@ -401,6 +405,13 @@ class BotManager extends EventEmitter {
             return;
 
         const guildConfig = connection.getGuildConfig();
+
+        // Skip auto-reconnection for manually disconnected guilds
+        if (this.manuallyDisconnected.has(guildId)) {
+            logger.minecraft(`Skipping auto-reconnection for ${guildConfig.name} (manual disconnect)`);
+            return;
+        }
+
         const reconnectionConfig = guildConfig.account.reconnection;
 
         // Check if reconnection is enabled
@@ -444,8 +455,101 @@ class BotManager extends EventEmitter {
     }
 
     /**
+     * Manually disconnect a guild bot
+     *
+     * Adds the guild to the manuallyDisconnected set (preventing auto-reconnect),
+     * cancels any pending reconnect timer, disconnects the bot, and emits a
+     * 'manual_disconnect' connection event.
+     *
+     * @async
+     * @param {string} guildId - Guild ID to disconnect
+     * @returns {Promise<void>}
+     */
+    async manualStop(guildId) {
+        const connection = this.connections.get(guildId);
+        if (!connection) {
+            throw new Error(`No connection found for guild: ${guildId}`);
+        }
+
+        const guildConfig = connection.getGuildConfig();
+
+        // Mark before disconnect so scheduleReconnection (if triggered) skips this guild
+        this.manuallyDisconnected.add(guildId);
+
+        // Cancel any pending auto-reconnect timer
+        if (this.reconnectTimers.has(guildId)) {
+            clearTimeout(this.reconnectTimers.get(guildId));
+            this.reconnectTimers.delete(guildId);
+        }
+
+        // Disconnect (bot.removeAllListeners() is called inside, so 'end' won't re-trigger)
+        await connection.disconnect();
+
+        this.emit('connection', {
+            type: 'manual_disconnect',
+            guildId,
+            guildName: guildConfig.name,
+            username: guildConfig.account.username
+        });
+
+        logger.minecraft(`Manual disconnect executed for ${guildConfig.name}`);
+    }
+
+    /**
+     * Manually reconnect a guild bot
+     *
+     * Removes the guild from the manuallyDisconnected set, cancels any pending
+     * reconnect timer, establishes a fresh connection, and emits a
+     * 'manual_reconnect' connection event.
+     *
+     * @async
+     * @param {string} guildId - Guild ID to reconnect
+     * @returns {Promise<void>}
+     * @throws {Error} If connection fails
+     */
+    async manualStart(guildId) {
+        const connection = this.connections.get(guildId);
+        if (!connection) {
+            throw new Error(`No connection found for guild: ${guildId}`);
+        }
+
+        const guildConfig = connection.getGuildConfig();
+
+        // Allow auto-reconnect again from this point on
+        this.manuallyDisconnected.delete(guildId);
+
+        // Cancel any stale timer
+        if (this.reconnectTimers.has(guildId)) {
+            clearTimeout(this.reconnectTimers.get(guildId));
+            this.reconnectTimers.delete(guildId);
+        }
+
+        await connection.connect();
+        this.setupConnectionMonitoring(guildId);
+
+        this.emit('connection', {
+            type: 'manual_reconnect',
+            guildId,
+            guildName: guildConfig.name,
+            username: guildConfig.account.username
+        });
+
+        logger.minecraft(`Manual reconnect executed for ${guildConfig.name}`);
+    }
+
+    /**
+     * Check whether a guild was manually disconnected by a user action.
+     *
+     * @param {string} guildId - Guild ID to check
+     * @returns {boolean}
+     */
+    isManuallyDisconnected(guildId) {
+        return this.manuallyDisconnected.has(guildId);
+    }
+
+    /**
      * Stop all guild connections
-     * 
+     *
      * Gracefully shuts down:
      * 1. Clears all reconnection timers
      * 2. Stops inter-guild queue processor
