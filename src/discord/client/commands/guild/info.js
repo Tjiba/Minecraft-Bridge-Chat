@@ -324,9 +324,12 @@ function parseGuildInfoResponse(message) {
         }
 
         // Parse Guild Level (format: "Guild Level: 214 (56% to Level 215)")
-        const levelMatch = line.match(/Guild\s+Level:\s*(\d+)/i);
+        const levelMatch = line.match(/Guild\s+Level:\s*(\d+)(?:\s*\((\d+(?:\.\d+)?)%\s+to\s+Level\s+\d+\))?/i);
         if (levelMatch && data.level === undefined) {
             data.level = parseInt(levelMatch[1], 10);
+            if (levelMatch[2] !== undefined) {
+                data.levelProgress = parseFloat(levelMatch[2]);
+            }
             continue;
         }
 
@@ -576,9 +579,13 @@ function createGuildInfoEmbed(guildConfig, guildData, onlineCount) {
 
     // Guild level (use direct level if available, otherwise calculate from exp)
     if (guildData?.level !== undefined) {
+        let levelValue = guildData.level.toString();
+        if (guildData?.levelProgress !== undefined) {
+            levelValue += ` (${guildData.levelProgress}% → Level ${guildData.level + 1})`;
+        }
         embed.addFields({
             name: "📊 Guild Level",
-            value: guildData.level.toString(),
+            value: levelValue,
             inline: true,
         });
     } else if (guildData?.exp !== undefined && guildData.exp !== null) {
