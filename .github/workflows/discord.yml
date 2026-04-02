@@ -1,7 +1,8 @@
-name: Notify Discord on Push
+name: Discord Test (Timo)
 
 on:
   push:
+  workflow_dispatch:
 
 jobs:
   notify:
@@ -10,71 +11,136 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Send push notification to Discord
+      - name: Build Discord payload
+        id: build_payload
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_TIMO: ${{ secrets.DISCORD_WEBHOOK_TIMO }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          AUTHOR: ${{ github.actor }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+          COMPARE_URL: ${{ github.event.compare }}
+          COMMITS_JSON: ${{ toJson(github.event.commits) }}
         run: |
-          REPO="${{ github.repository }}"
-          BRANCH="${{ github.ref_name }}"
-          AUTHOR="${{ github.actor }}"
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          COMMIT_URL="${{ github.event.head_commit.url }}"
-          AVATAR_URL="https://github.com/${AUTHOR}.png"
-
           export TZ="Europe/Paris"
-          TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
 
-          CHANGED_FILES=$(git diff --stat HEAD~1 HEAD | tail -1 | awk '{print $1}')
-          LINES_ADDED=$(git diff --stat HEAD~1 HEAD | tail -1 | awk '{print $4}')
-          LINES_DELETED=$(git diff --stat HEAD~1 HEAD | tail -1 | awk '{print $6}')
-          TOTAL_LINES=$((LINES_ADDED + LINES_DELETED))
+          python3 <<'PY'
+          import json
+          import os
+          import urllib.request
+          from datetime import datetime
 
-          CHANGED_FILES=${CHANGED_FILES:-0}
-          LINES_ADDED=${LINES_ADDED:-0}
-          LINES_DELETED=${LINES_DELETED:-0}
-          TOTAL_LINES=${TOTAL_LINES:-0}
+          repo = os.environ["REPO"]
+          branch = os.environ["BRANCH"]
+          author = os.environ["AUTHOR"]
+          before = os.environ["BEFORE"]
+          after = os.environ["AFTER"]
+          compare_url = os.environ["COMPARE_URL"]
+          github_token = os.environ["GITHUB_TOKEN"]
+          commits = json.loads(os.environ["COMMITS_JSON"])
 
-          JSON_PAYLOAD=$(jq -n \
-            --arg repo "$REPO" \
-            --arg branch "$BRANCH" \
-            --arg author "$AUTHOR" \
-            --arg msg "$COMMIT_MSG" \
-            --arg url "$COMMIT_URL" \
-            --arg avatar "$AVATAR_URL" \
-            --arg time "$TIMESTAMP" \
-            --arg changed "$CHANGED_FILES" \
-            --arg added "$LINES_ADDED" \
-            --arg deleted "$LINES_DELETED" \
-            --arg total "$TOTAL_LINES" \
-            '{
+          avatar_url = f"https://github.com/{author}.png"
+          timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+          # 📌 Liste des commits
+          commit_lines = []
+          for c in commits:
+              sha = c.get("id", "")[:7]
+              msg = c.get("message", "").split("\n", 1)[0].strip()
+              url = c.get("url", "")
+              commit_author = c.get("author", {}).get("name", "unknown")
+              commit_lines.append(f"[`{sha}`]({url}) {msg} — **{commit_author}**")
+
+          if not commit_lines:
+              commit_lines = ["Aucun commit trouvé"]
+
+          # 📊 Stats globales du push
+          api_url = f"https://api.github.com/repos/{repo}/compare/{before}...{after}"
+          req = urllib.request.Request(
+              api_url,
+              headers={
+                  "Authorization": f"Bearer {github_token}",
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "github-actions"
+              }
+          )
+
+          with urllib.request.urlopen(req) as response:
+              compare_data = json.load(response)
+
+          files = compare_data.get("files", [])
+          additions = sum(f.get("additions", 0) for f in files)
+          deletions = sum(f.get("deletions", 0) for f in files)
+          total_changes = sum(f.get("changes", 0) for f in files)
+          changed_files = len(files)
+          commit_count = len(compare_data.get("commits", commits))
+
+          commits_text = "\n".join(commit_lines[:15])
+          if len(commit_lines) > 15:
+              commits_text += f"\n… et **{len(commit_lines) - 15}** autres commits"
+
+          payload = {
               "username": "GitHub",
               "avatar_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
-              "embeds": [{
-                "title": "🚀 New push to \($repo)",
-                "url": $url,
-                "color": 5814783,
-                "author": {
-                  "name": $author,
-                  "icon_url": $avatar
-                },
-                "fields": [
-                  {"name": "📂 Repository", "value": $repo, "inline": true},
-                  {"name": "🌿 Branch", "value": $branch, "inline": true},
-                  {"name": "📝 Commit", "value": $msg},
-                  {"name": "📊 Changes", "value": "Files changed: **\($changed)**\nAdditions: **\($added)**\nDeletions: **\($deleted)**\nTotal lines changed: **\($total)**"}
-                ],
-                "footer": {
-                  "text": "GitHub Action • \($time)"
-                }
-              }]
-            }')
+              "embeds": [
+                  {
+                      "title": f"🚀 Push sur {repo}",
+                      "url": compare_url,
+                      "color": 5814783,
+                      "author": {
+                          "name": author,
+                          "icon_url": avatar_url
+                      },
+                      "fields": [
+                          {
+                              "name": "📂 Repository",
+                              "value": repo,
+                              "inline": True
+                          },
+                          {
+                              "name": "🌿 Branche",
+                              "value": branch,
+                              "inline": True
+                          },
+                          {
+                              "name": "🧾 Commits",
+                              "value": f"**{commit_count} commit(s)**\n{commits_text}"
+                          },
+                          {
+                              "name": "📊 Changements",
+                              "value": (
+                                  f"Fichiers: **{changed_files}**\n"
+                                  f"+{additions} ajouts\n"
+                                  f"-{deletions} suppressions\n"
+                                  f"Total: **{total_changes} lignes**"
+                              )
+                          }
+                      ],
+                      "footer": {
+                          "text": f"GitHub Action • {timestamp}"
+                      }
+                  }
+              ]
+          }
 
-          curl -H "Content-Type: application/json" \
-              -X POST \
-              -d "$JSON_PAYLOAD" \
-              $DISCORD_WEBHOOK
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write("json_payload<<EOF\n")
+              f.write(json.dumps(payload, ensure_ascii=False))
+              f.write("\nEOF\n")
+          PY
+
+      - name: Send to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_TIMO: ${{ secrets.DISCORD_WEBHOOK_TIMO }}
+          JSON_PAYLOAD: ${{ steps.build_payload.outputs.json_payload }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" \
+                 -X POST \
+                 -d "$JSON_PAYLOAD" \
+                 "$DISCORD_WEBHOOK"
+          fi
