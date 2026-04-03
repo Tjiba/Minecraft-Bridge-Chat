@@ -15,7 +15,6 @@ jobs:
         id: build_payload
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_WEBHOOK_TIMO: ${{ secrets.DISCORD_WEBHOOK_TIMO }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
@@ -135,7 +134,6 @@ jobs:
       - name: Send to Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_WEBHOOK_TIMO: ${{ secrets.DISCORD_WEBHOOK_TIMO }}
           JSON_PAYLOAD: ${{ steps.build_payload.outputs.json_payload }}
         run: |
           if [ -n "$DISCORD_WEBHOOK" ]; then
