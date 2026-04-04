@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./fl_logo.png" alt="French Legacy Logo" width="200"/>
+
 <h1>Minecraft-Bridge-Chat</h1>
 
 <p>Bidirectional chat bridge between Minecraft guild chat and Discord.</p>
