@@ -1,204 +1,173 @@
-# Minecraft Bridge Chat
+<div align="center">
 
-A sophisticated bridge system that connects Minecraft servers (primarily Hypixel) with Discord, enabling seamless communication between in-game guild chat and Discord channels.
+<img src="./fl_logo.png" alt="French Legacy Logo" width="200"/>
 
-## Features
+<h1>Minecraft-Bridge-Chat</h1>
 
-- **Bidirectional Communication**: Messages flow seamlessly between Minecraft guilds chats and Discord channels
-- **Webhook Integration**: Uses Discord webhooks for authentic message display with player avatars
-- **Multi-Guild Support**: Manage multiple Minecraft guilds across different Discord channels
-- **Command System**: Comprehensive slash commands and in-game command forwarding
-- **Event Detection**: Automatically detects and relays important guild events (joins, leaves, promotions, etc.)
-- **Flexible Configuration**: JSON-based configuration with pattern matching and templates
-- **Server Strategies**: Extensible architecture supporting different Minecraft server types
-- **Inter-Guild Messaging**: Cross-guild communication capabilities
-- **Advanced Parsing**: Intelligent message parsing with pattern recognition and cleaning
+<p>Bidirectional chat bridge between Minecraft guild chat and Discord.</p>
 
-## Architecture Overview
+[![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2?logo=discord&logoColor=white)](https://discord.js.org)
+[![Mineflayer](https://img.shields.io/badge/mineflayer-v4-62B15B)](https://github.com/PrismarineJS/mineflayer)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](./docker-compose.yml)
 
-The project is organized into several core modules:
-
-```
-src/
-├── config/          → Configuration management system
-├── discord/         → Discord bot and bridge coordination
-├── minecraft/       → Minecraft bot and message parsing
-├── shared/          → Shared utilities and formatters
-├── bridgeLocator.js → Bridge discovery and management
-└── main.js          → Application entry point
-```
-
-For detailed information about each module, see:
-- [Discord Module Documentation](src/discord/README.md)
-- [Minecraft Module Documentation](src/minecraft/README.md)
-- [Configuration System Documentation](src/config/README.md)
-- [Shared Utilities Documentation](src/shared/README.md)
-
-## Prerequisites
-
-- **Node.js** v22.0.0 or higher
-- **Discord Bot Token** with appropriate permissions
-- **Minecraft Account** for bot connection
-- **Guild Permissions** on target Minecraft server
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd Minecraft-Bridge-Chat
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Configure the application:
-   - Copy configuration templates from `config/` directory
-   - Set up your Discord bot token
-   - Configure Minecraft bot credentials
-   - Define guild-to-channel mappings
-   - Customize message patterns and templates
-
-4. Start the bridge:
-```bash
-npm start
-```
-
-## Configuration
-
-The bridge uses a multi-layered configuration system:
-
-- **Main Config**: Bot credentials and connection settings
-- **Patterns**: Regular expressions for message and event detection
-- **Templates**: Message formatting templates for different event types
-- **Guild Mappings**: Links between Minecraft guilds and Discord channels
-
-See the [Configuration Documentation](src/config/README.md) for detailed setup instructions.
-
-## Usage
-
-### Discord Commands
-
-The bot provides several slash commands:
-
-- `/ping` - Check bot responsiveness
-- `/help` - Display available commands
-- `/serverinfo` - Show information about connected Minecraft servers
-- `/guild list <guild> <type>` - List guild members
-- `/guild invite <guild> <player>` - Invite a player to the guild
-- `/guild kick <guild> <player> <reason>` - Kick a player from the guild
-- `/guild promote <guild> <player>` - Promote a guild member
-- `/guild demote <guild> <player>` - Demote a guild member
-- `/guild mute <guild> <scope> <time> <player>` - Mute a guild member
-- `/guild unmute <guild> <scope> <player>` - Unmute a guild member
-- `/guild setrank <guild> <player> <rank>` - Set a player's guild rank
-- `/guild info <guild>` - Get the guild informations
-
-### Message Flow
-
-1. **Minecraft → Discord**: 
-   - Guild chat messages are detected and parsed
-   - Messages are formatted according to templates
-   - Sent to Discord via webhooks with player avatars
-
-2. **Discord → Minecraft**:
-   - Discord messages are formatted for Minecraft
-   - Sent to guild chat via the Minecraft bot
-   - Commands are detected and forwarded appropriately
-
-## How It Works
-
-### Bridge Coordination
-
-The system uses a coordinator pattern to manage message flow:
-
-1. **DiscordManager** handles Discord bot lifecycle and message reception
-2. **MinecraftManager** manages Minecraft bot connections and message parsing
-3. **BridgeCoordinator** coordinates message relay between both platforms
-4. **InterGuildManager** handles cross-guild communication
-
-### Message Parsing
-
-Minecraft messages go through a sophisticated parsing pipeline:
-
-1. **Pattern Matching**: Regex patterns detect message types
-2. **Message Cleaning**: Removes Minecraft formatting codes and normalizes text
-3. **Event Detection**: Identifies guild events (joins, leaves, promotions, etc.)
-4. **Coordination**: Routes messages to appropriate handlers
-
-### Command System
-
-The command system operates on two levels:
-
-1. **Discord Slash Commands**: Native Discord commands with validation
-2. **Command Forwarding**: Discord messages starting with `/` are forwarded to Minecraft
-3. **Response Listening**: Bot monitors for command responses from the server
-
-## Project Structure
-
-- `main.js` - Application entry point and initialization
-- `bridgeLocator.js` - Locates and manages bridge instances
-- `src/config/` - Configuration loading and management
-- `src/discord/` - Discord bot implementation and bridge coordination
-- `src/minecraft/` - Minecraft bot and message parsing system
-- `src/shared/` - Shared utilities, formatters, and logging
-
-## Development
-
-### Adding New Commands
-
-To add a new Discord command:
-
-1. Create a new command file in `src/discord/client/commands/`
-2. Implement the command structure with `data` and `execute` properties
-3. The command will be automatically loaded and registered
-
-### Extending Message Patterns
-
-To add new message or event patterns:
-
-1. Update pattern definitions in configuration files
-2. Add corresponding templates for message formatting
-3. Update parsers if new parsing logic is required
-
-## Logging
-
-The system includes a comprehensive logging system:
-
-- Console output with colored formatting
-- File-based logging with rotation
-- Separate logs for different components
-- Error tracking and debugging information
-
-See [Shared Utilities Documentation](src/shared/README.md) for logger details.
-
-## Troubleshooting
-
-### Bot Not Connecting to Minecraft
-- Verify credentials are correct
-- Check if the Minecraft account has access to the server
-- Ensure no rate limiting is in place
-
-### Messages Not Bridging
-- Verify webhook URLs are correct
-- Check pattern matching in configuration
-- Review logs for parsing errors
-
-### Commands Not Working
-- Ensure bot has required Discord permissions
-- Verify guild permissions on Minecraft server
-- Check command response listening timeout
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-- Code follows existing patterns and style
-- All messages and comments are in English
-- New features include appropriate documentation
-- Changes are tested across different scenarios
+</div>
 
 ---
 
-**Note**: This bridge is designed for Hypixel but can be extended to support other Minecraft servers through the strategy pattern.
+## What it does
+
+Connects your Minecraft guild chat (Hypixel) to a Discord server in real time. Messages sent in-game appear in Discord and vice versa. Guild events are also relayed automatically.
+
+**Features:**
+- Real-time bidirectional message relay (Minecraft ↔ Discord)
+- Guild event detection — joins, leaves, promotions, kicks, mutes...
+- Discord slash commands to manage the guild directly from Discord
+- Webhook integration with player avatars for authentic message display
+- Multi-guild support (multiple Minecraft guilds in separate Discord channels)
+- Inter-guild communication (cross-guild message relay)
+- Automatic reconnection with exponential backoff
+
+---
+
+## Prerequisites
+
+- Node.js >= 22.0.0
+- A Discord bot token (with message content intent + slash commands)
+- A Minecraft account (Microsoft) with access to the target guild
+- Guild officer/admin permissions on the Minecraft server
+
+---
+
+## Installation
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/FrenchLegacy/Minecraft-Bridge-Chat.git
+cd Minecraft-Bridge-Chat
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure
+cp config/settings.example.json config/settings.json
+# Edit config/settings.json with your credentials
+
+# 4. Start
+npm start
+
+# Development mode (auto-reload)
+npm run dev
+```
+
+### Docker
+
+```bash
+docker-compose up -d
+```
+
+---
+
+## Configuration
+
+Copy `config/settings.example.json` to `config/settings.json` and fill in the following:
+
+### App
+
+```json
+{
+  "app": {
+    "token": "YOUR_DISCORD_BOT_TOKEN",
+    "clientId": "YOUR_BOT_CLIENT_ID",
+    "serverDiscordId": "YOUR_DISCORD_SERVER_ID"
+  }
+}
+```
+
+### Guild
+
+```json
+{
+  "guilds": [{
+    "name": "MyGuild",
+    "id": "myguild",
+    "enabled": true,
+    "server": {
+      "serverName": "Hypixel",
+      "host": "mc.hypixel.net",
+      "port": 25565,
+      "version": "1.8.9"
+    },
+    "account": {
+      "email": "bot_email@example.com",
+      "authMethod": "microsoft",
+      "sessionPath": "./data/auth-cache",
+      "reconnection": {
+        "enabled": true,
+        "maxRetries": 5,
+        "retryDelay": 30000,
+        "exponentialBackoff": true
+      }
+    },
+    "ranks": ["Member", "Officer", "Co-Leader", "Leader"]
+  }]
+}
+```
+
+Set the Discord channel IDs and webhook URLs for chat and staff channels in each guild config.
+
+Other config files (no editing required for basic use):
+- `config/patterns.json` — regex patterns for message/event detection
+- `config/templates.json` — message formatting templates
+
+---
+
+## Discord commands
+
+| Command | Description |
+|---------|-------------|
+| `/ping` | Bot latency |
+| `/help` | List available commands |
+| `/serverinfo` | Connected server info |
+| `/guild list <guild> <type>` | List guild members |
+| `/guild invite <guild> <player>` | Invite a player |
+| `/guild kick <guild> <player> <reason>` | Kick a player |
+| `/guild promote/demote <guild> <player>` | Manage ranks |
+| `/guild mute/unmute <guild> <player>` | Moderation |
+| `/guild setrank <guild> <player> <rank>` | Set a rank directly |
+| `/guild info <guild>` | Guild info |
+| `/guild execute <guild> <command>` | Run an arbitrary guild command |
+
+---
+
+## Project structure
+
+```
+src/
+├── main.js                          # Entry point
+├── config/                          # Config loading & validation
+├── discord/                         # Discord bot & bridge
+│   ├── bridge/BridgeCoordinator.js  # Message relay logic
+│   ├── client/commands/             # Slash commands
+│   └── client/senders/              # Webhook & message senders
+├── minecraft/                       # Minecraft bot
+│   ├── client/parsers/              # Chat & event parsing
+│   └── servers/HypixelStrategy.js  # Hypixel-specific handling
+└── shared/                          # Logger, formatter, inter-guild
+```
+
+---
+
+## Troubleshooting
+
+**Bot not connecting to Minecraft** — Check credentials, Microsoft auth, and that the account has guild access.
+
+**Messages not bridging** — Verify webhook URLs and check logs for parsing errors.
+
+**Commands not working** — Ensure the bot has the required Discord permissions and guild officer role in-game.
+
+---
+
+<div align="center">
+<sub>Made by <a href="https://github.com/FrenchLegacy">French Legacy</a> — maintained by <a href="https://github.com/Fabien83560">@Fabien83560</a></sub>
+</div>
